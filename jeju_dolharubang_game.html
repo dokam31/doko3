@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>제주도 돌하르방 게임 doko3</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Malgun Gothic', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    /* 바다 배경 (그라데이션 + 파도 효과) */
+    background: linear-gradient(180deg, #4FC3F7 0%, #29B6F6 30%, #0288D1 60%, #01579B 100%);
+    position: relative;
+  }
+
+  /* 바다 물결 효과 */
+  body::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: 
+      radial-gradient(ellipse at 20% 30%, rgba(255,255,255,0.15) 0%, transparent 40%),
+      radial-gradient(ellipse at 80% 70%, rgba(255,255,255,0.1) 0%, transparent 40%),
+      radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.08) 0%, transparent 50%);
+    animation: waveMove 8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes waveMove {
+    0%, 100% { transform: translateX(0) translateY(0); }
+    50% { transform: translateX(20px) translateY(-10px); }
+  }
+
+  /* 화면 중앙 컨테이너 */
+  #gameContainer {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* 제주도 지도 (화면의 1/5 크기) */
+  #jejuMap {
+    position: relative;
+    width: 40vmin;
+    height: 28vmin;
+    background: linear-gradient(135deg, #8BC34A 0%, #689F38 50%, #558B2F 100%);
+    border-radius: 50% 45% 55% 50% / 60% 55% 50% 45%;
+    box-shadow: 
+      0 10px 30px rgba(0,0,0,0.3),
+      inset 0 -10px 30px rgba(0,0,0,0.2),
+      inset 0 10px 30px rgba(255,255,255,0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* 한라산 표시 */
+  #jejuMap::before {
+    content: '';
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5vmin solid transparent;
+    border-right: 5vmin solid transparent;
+    border-bottom: 6vmin solid rgba(101, 67, 33, 0.6);
+    z-index: 1;
+  }
+
+  /* 제주도 라벨 */
+  #jejuLabel {
+    position: absolute;
+    bottom: -3vmin;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-size: 2vmin;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    white-space: nowrap;
+  }
+
+  /* 돌하르방 컨테이너 (지도 높이의 1/2) */
+  #dolContainer {
+    position: relative;
+    width: 14vmin;
+    height: 14vmin;
+    z-index: 10;
+    display: flex;
+    gap: 2vmin;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* 돌하르방 SVG */
+  .dol-wrapper {
+    position: relative;
+    width: 14vmin;
+    height: 14vmin;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    filter: drop-shadow(3px 5px 8px rgba(0,0,0,0.4));
+  }
+  .dol-wrapper:hover {
+    transform: scale(1.05);
+  }
+  .dol-wrapper:active {
+    transform: scale(0.95);
+  }
+  .dol-wrapper.disabled {
+    cursor: not-allowed;
+  }
+
+  /* 돌할멈 (성공시 등장) */
+  #dolHalmum {
+    width: 14vmin;
+    height: 14vmin;
+    opacity: 0;
+    transform: translateX(-20px) scale(0.5);
+    transition: all 0.8s ease;
+    filter: drop-shadow(3px 5px 8px rgba(0,0,0,0.4));
+  }
+  #dolHalmum.show {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  /* 메시지 박스 */
+  #messageBox {
+    position: absolute;
+    top: 8%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.95);
+    padding: 1.5vmin 3vmin;
+    border-radius: 2vmin;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+    font-size: 2.5vmin;
+    font-weight: bold;
+    color: #01579B;
+    text-align: center;
+    min-width: 30vmin;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    border: 3px solid #FFD700;
+  }
+  #messageBox.show {
+    opacity: 1;
+  }
+  #messageBox.success {
+    color: #2E7D32;
+    border-color: #4CAF50;
+  }
+  #messageBox.fail {
+    color: #C62828;
+    border-color: #F44336;
+  }
+  #messageBox.final {
+    color: #6A1B9A;
+    border-color: #FFD700;
+    font-size: 3.5vmin;
+    background: linear-gradient(135deg, #FFF9C4 0%, #FFE082 100%);
+  }
+
+  /* 클릭 카운터 */
+  #counter {
+    position: absolute;
+    top: 3%;
+    right: 3%;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    padding: 1.5vmin 2.5vmin;
+    border-radius: 2vmin;
+    font-size: 2vmin;
+    font-weight: bold;
+    z-index: 100;
+  }
+
+  /* 재시작 버튼 */
+  #restartBtn {
+    position: absolute;
+    bottom: 5%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 1.5vmin 4vmin;
+    font-size: 2.2vmin;
+    font-weight: bold;
+    background: linear-gradient(135deg, #FF9800, #F57C00);
+    color: white;
+    border: none;
+    border-radius: 3vmin;
+    cursor: pointer;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    display: none;
+    z-index: 100;
+    transition: transform 0.2s;
+  }
+  #restartBtn:hover {
+    transform: translateX(-50%) scale(1.05);
+  }
+  #restartBtn.show {
+    display: block;
+  }
+
+  /* 폭죽 캔버스 */
+  #fireworks {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 50;
+  }
+
+  /* 타이틀 */
+  #title {
+    position: absolute;
+    top: 2%;
+    left: 3%;
+    color: white;
+    font-size: 2.5vmin;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    z-index: 100;
+  }
+
+  /* 색상 변화 애니메이션 */
+  @keyframes colorChange {
+    0% { transform: scale(1) rotate(0deg); }
+    50% { transform: scale(1.15) rotate(-5deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+  .dol-wrapper.clicked {
+    animation: colorChange 0.4s ease;
+  }
+</style>
+</head>
+<body>
+
+<div id="title">🌊 제주도 돌하르방 챌린지 🌋</div>
+<div id="counter">클릭: <span id="clickCount">0</span> / 10</div>
+
+<div id="gameContainer">
+  <div id="jejuMap">
+    <div id="jejuLabel">🏝️ 제주도 🏝️</div>
+    <div id="dolContainer">
+      <!-- 돌하르방 SVG -->
+      <div class="dol-wrapper" id="dolharubang" onclick="clickDol()">
+        <svg viewBox="0 0 100 140" width="100%" height="100%">
+          <!-- 모자 -->
+          <ellipse cx="50" cy="25" rx="32" ry="15" fill="currentColor" class="dol-body"/>
+          <rect x="22" y="22" width="56" height="12" fill="currentColor" class="dol-body"/>
+          <!-- 머리/얼굴 -->
+          <ellipse cx="50" cy="55" rx="30" ry="28" fill="currentColor" class="dol-body"/>
+          <!-- 눈 (큰 눈) -->
+          <ellipse cx="38" cy="52" rx="6" ry="7" fill="#1a1a1a"/>
+          <ellipse cx="62" cy="52" rx="6" ry="7" fill="#1a1a1a"/>
+          <ellipse cx="38" cy="50" rx="2" ry="2" fill="white"/>
+          <ellipse cx="62" cy="50" rx="2" ry="2" fill="white"/>
+          <!-- 코 (큰 코) -->
+          <ellipse cx="50" cy="62" rx="4" ry="8" fill="currentColor" class="dol-body" stroke="#444" stroke-width="0.5"/>
+          <!-- 입 -->
+          <path d="M 40 73 Q 50 78 60 73" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <!-- 몸통 -->
+          <path d="M 25 80 Q 25 120 35 135 L 65 135 Q 75 120 75 80 Z" fill="currentColor" class="dol-body"/>
+          <!-- 손 (배 위에 손) -->
+          <ellipse cx="38" cy="105" rx="6" ry="8" fill="currentColor" class="dol-body" stroke="#444" stroke-width="0.5"/>
+          <ellipse cx="62" cy="105" rx="6" ry="8" fill="currentColor" class="dol-body" stroke="#444" stroke-width="0.5"/>
+          <!-- 텍스처 점들 -->
+          <circle cx="30" cy="50" r="1" fill="rgba(0,0,0,0.2)"/>
+          <circle cx="70" cy="55" r="1" fill="rgba(0,0,0,0.2)"/>
+          <circle cx="45" cy="90" r="1" fill="rgba(0,0,0,0.2)"/>
+          <circle cx="60" cy="100" r="1" fill="rgba(0,0,0,0.2)"/>
+          <circle cx="35" cy="120" r="1" fill="rgba(0,0,0,0.2)"/>
+        </svg>
+      </div>
+
+      <!-- 돌할멈 SVG (성공시 등장) -->
+      <div id="dolHalmum">
+        <svg viewBox="0 0 100 140" width="100%" height="100%">
+          <!-- 머릿수건 (둥근 머리) -->
+          <ellipse cx="50" cy="30" rx="30" ry="22" fill="#B0BEC5"/>
+          <!-- 얼굴 -->
+          <ellipse cx="50" cy="55" rx="26" ry="25" fill="#CFD8DC"/>
+          <!-- 눈 (속눈썹 있는 작은 눈) -->
+          <ellipse cx="40" cy="55" rx="4" ry="5" fill="#1a1a1a"/>
+          <ellipse cx="60" cy="55" rx="4" ry="5" fill="#1a1a1a"/>
+          <ellipse cx="40" cy="53" rx="1.5" ry="1.5" fill="white"/>
+          <ellipse cx="60" cy="53" rx="1.5" ry="1.5" fill="white"/>
+          <!-- 속눈썹 -->
+          <line x1="36" y1="48" x2="34" y2="46" stroke="#1a1a1a" stroke-width="1"/>
+          <line x1="40" y1="47" x2="40" y2="44" stroke="#1a1a1a" stroke-width="1"/>
+          <line x1="44" y1="48" x2="46" y2="46" stroke="#1a1a1a" stroke-width="1"/>
+          <line x1="56" y1="48" x2="54" y2="46" stroke="#1a1a1a" stroke-width="1"/>
+          <line x1="60" y1="47" x2="60" y2="44" stroke="#1a1a1a" stroke-width="1"/>
+          <line x1="64" y1="48" x2="66" y2="46" stroke="#1a1a1a" stroke-width="1"/>
+          <!-- 볼터치 -->
+          <ellipse cx="32" cy="62" rx="4" ry="3" fill="#FFAB91" opacity="0.6"/>
+          <ellipse cx="68" cy="62" rx="4" ry="3" fill="#FFAB91" opacity="0.6"/>
+          <!-- 코 (작은 코) -->
+          <ellipse cx="50" cy="63" rx="2.5" ry="5" fill="#B0BEC5"/>
+          <!-- 입 (미소) -->
+          <path d="M 42 73 Q 50 79 58 73" stroke="#D81B60" stroke-width="2" fill="#F48FB1" stroke-linecap="round"/>
+          <!-- 몸통 (한복 느낌) -->
+          <path d="M 25 80 Q 25 120 35 135 L 65 135 Q 75 120 75 80 Z" fill="#F8BBD0"/>
+          <!-- 한복 무늬 -->
+          <circle cx="40" cy="100" r="2" fill="#EC407A"/>
+          <circle cx="60" cy="100" r="2" fill="#EC407A"/>
+          <circle cx="50" cy="115" r="2" fill="#EC407A"/>
+          <!-- 손 -->
+          <ellipse cx="38" cy="105" rx="5" ry="7" fill="#CFD8DC"/>
+          <ellipse cx="62" cy="105" rx="5" ry="7" fill="#CFD8DC"/>
+          <!-- 꽃 장식 -->
+          <circle cx="35" cy="25" r="3" fill="#E91E63"/>
+          <circle cx="33" cy="23" r="1.5" fill="#FFEB3B"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="messageBox"></div>
+<button id="restartBtn" onclick="restartGame()">🔄 다시 시작하기</button>
+<canvas id="fireworks"></canvas>
+
+<script>
+  // 게임 상태
+  let clickCount = 0;
+  let gameOver = false;
+  let usedColors = [];
+
+  // 8가지 색상 (회색, 검정 제외)
+  const colorPool = [
+    '#E53935', // 빨강
+    '#FB8C00', // 주황
+    '#FDD835', // 노랑
+    '#43A047', // 초록
+    '#1E88E5', // 파랑
+    '#5E35B1', // 보라
+    '#EC407A', // 핑크
+    '#00ACC1'  // 청록
+  ];
+
+  // 단계별 실패 확률 (%)
+  const failProbs = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+
+  // 디폴트 색상 (회색) 적용
+  const dol = document.getElementById('dolharubang');
+  dol.style.color = '#9E9E9E';
+
+  function showMessage(text, type = '') {
+    const box = document.getElementById('messageBox');
+    box.textContent = text;
+    box.className = 'show ' + type;
+  }
+
+  function hideMessage() {
+    document.getElementById('messageBox').classList.remove('show');
+  }
+
+  function getRandomColor() {
+    // 사용되지 않은 색상 중 랜덤 선택
+    const available = colorPool.filter(c => !usedColors.includes(c));
+    if (available.length === 0) return colorPool[0];
+    const color = available[Math.floor(Math.random() * available.length)];
+    usedColors.push(color);
+    return color;
+  }
+
+  function clickDol() {
+    if (gameOver) return;
+    if (clickCount >= 10) return;
+
+    clickCount++;
+    document.getElementById('clickCount').textContent = clickCount;
+
+    // 클릭 애니메이션
+    dol.classList.remove('clicked');
+    void dol.offsetWidth; // 리플로우 트리거
+    dol.classList.add('clicked');
+
+    // 실패 확률 체크 (10번째 클릭 제외 - 10번째는 무조건 성공)
+    const failProb = failProbs[clickCount - 1];
+    const roll = Math.random() * 100;
+
+    if (clickCount < 10 && roll < failProb) {
+      // 실패!
+      const successProb = 100 - failProb;
+      showMessage(`💥 실패, ${successProb}%도 못넘다니... 💥`, 'fail');
+      dol.style.color = '#424242';
+      dol.classList.add('disabled');
+      gameOver = true;
+      document.getElementById('restartBtn').classList.add('show');
+      return;
+    }
+
+    if (clickCount === 10) {
+      // 10번째 클릭 - 최종 성공!
+      dol.style.color = '#1a1a1a'; // 검정색
+      dol.classList.add('disabled');
+      gameOver = true;
+      
+      // 돌할멈 등장
+      setTimeout(() => {
+        document.getElementById('dolHalmum').classList.add('show');
+      }, 300);
+
+      // 성공 메시지
+      setTimeout(() => {
+        showMessage('🎉 골인 성공입니다! 🎉', 'final');
+      }, 600);
+
+      // 폭죽 시작
+      setTimeout(() => {
+        startFireworks();
+      }, 800);
+
+      document.getElementById('restartBtn').classList.add('show');
+    } else {
+      // 성공 - 색상 변경
+      const newColor = getRandomColor();
+      dol.style.color = newColor;
+      showMessage(`✨ ${clickCount}차 성공 ✨`, 'success');
+    }
+  }
+
+  function restartGame() {
+    clickCount = 0;
+    gameOver = false;
+    usedColors = [];
+    document.getElementById('clickCount').textContent = '0';
+    dol.style.color = '#9E9E9E';
+    dol.classList.remove('disabled', 'clicked');
+    document.getElementById('dolHalmum').classList.remove('show');
+    document.getElementById('restartBtn').classList.remove('show');
+    hideMessage();
+    stopFireworks();
+  }
+
+  // ========== 폭죽 효과 ==========
+  const canvas = document.getElementById('fireworks');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  let particles = [];
+  let fireworksActive = false;
+  let fireworksInterval = null;
+
+  window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  });
+
+  class Particle {
+    constructor(x, y, color) {
+      this.x = x;
+      this.y = y;
+      this.color = color;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 6 + 2;
+      this.vx = Math.cos(angle) * speed;
+      this.vy = Math.sin(angle) * speed;
+      this.alpha = 1;
+      this.gravity = 0.08;
+      this.size = Math.random() * 3 + 2;
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      this.vy += this.gravity;
+      this.alpha -= 0.012;
+    }
+    draw() {
+      ctx.save();
+      ctx.globalAlpha = this.alpha;
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+      ctx.fill();
+      // 글로우 효과
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = this.color;
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function createFirework() {
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height * 0.5 + canvas.height * 0.1;
+    const colors = ['#FF1744', '#FFD600', '#00E676', '#2979FF', '#D500F9', '#FF6D00', '#00E5FF', '#FFEB3B'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    for (let i = 0; i < 60; i++) {
+      particles.push(new Particle(x, y, color));
+    }
+  }
+
+  function animateFireworks() {
+    if (!fireworksActive) return;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    particles = particles.filter(p => p.alpha > 0);
+    particles.forEach(p => {
+      p.update();
+      p.draw();
+    });
+    requestAnimationFrame(animateFireworks);
+  }
+
+  function startFireworks() {
+    fireworksActive = true;
+    animateFireworks();
+    fireworksInterval = setInterval(createFirework, 400);
+    // 처음에 여러 발 연속으로
+    for (let i = 0; i < 3; i++) {
+      setTimeout(createFirework, i * 200);
+    }
+  }
+
+  function stopFireworks() {
+    fireworksActive = false;
+    if (fireworksInterval) {
+      clearInterval(fireworksInterval);
+      fireworksInterval = null;
+    }
+    particles = [];
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+</script>
+
+</body>
+</html>
